@@ -1,0 +1,149 @@
+---
+title: "Shiny Tutorial"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+# setwd("C:/Users/benny/Business_Science_University/DS4B_201_Shiny_Web_Apps/DS4B_102_R_Shiny_Apps_1/03_sales_dashboard_shiny")
+---
+
+```{r setup, include=FALSE}
+# Shiny
+library(flexdashboard)
+library(shiny)
+library(DT)
+
+# Core
+library(tidyverse)
+library(tidyquant)
+library(readr)
+```
+
+```{r}
+# Make data
+# set.seed(123)
+# sales_data_tbl <- tibble(
+#   date  = seq.Date(from = ymd("2018-01-01"), to = today(), length.out = 90),
+#   class = sample(c("marketing", "sales", "research"), size = 90, replace = TRUE),
+#   sales = runif(n = 90, min = 1, max = 100)
+# )
+
+all <- read.csv("2021_epa_conferences.csv")
+
+
+all_tbl <- all %>%
+    select("name", "position", "team", "conference", "countablePlays", "totalPPA.all") %>%
+    arrange(desc(totalPPA.all))
+
+all_tbl <- tibble(all_tbl)
+```
+
+
+
+
+Sidebar {.sidebar}
+------------------------
+
+```{r}
+# Inputs
+checkboxGroupInput(inputId = "checkbox_group",
+                   label   = h4("Position"),
+                   choices = c("Quarterback"   = "QB",
+                               "Running Back"  = "RB",
+                               "Wide Receiver" = "WR",
+                               "Tight End"     = "TE"),
+                   selected = c("QB", "RB", "WR", "TE"))
+```
+
+
+```{r}
+sliderInput(inputId = "slider_input",
+            label   = h4("Countable Plays"),
+            min = 1,
+            max = 723,
+            value = c(1,723),
+            step = 1,
+            round = TRUE)
+
+```
+
+```{r}
+# Reset Button
+actionButton(inputId = "reset",
+             label = "Reset",
+             icon = icon("sync"))
+
+observeEvent(eventExpr = input$reset, handlerExpr = {
+    
+    updateCheckboxGroupInput(session = session,
+                             inputId = "checkbox_group",
+                             selected = c("QB", "RB", "WR", "TE"))
+    
+    
+})
+```
+
+
+Column {data-width=500}
+-----------------------
+
+### Section - Checkbox Output
+
+```{r}
+output$checkbox_values <- renderPrint(input$checkbox_group)
+
+textOutput(outputId = "checkbox_values")
+```
+
+### Section - Slider Output
+
+```{r}
+output$slider_values <- renderPrint(input$slider_input)
+
+textOutput(outputId = "slider_values")
+
+```
+
+
+Column {data-width=750}
+-----------------------
+
+```{r}
+# Reactive Filter
+all_tbl_filtered <- reactive({
+    all_tbl %>%
+        filter(position %in% input$checkbox_group) %>% 
+        filter(countablePlays %>% between(left = input$slider_input[1],
+                                          right = input$slider_input[2]))
+})
+
+```
+
+
+### Section - Reactive Output
+
+```{r}
+# renderPrint( sec_tbl_filtered() )
+output$dt_output_1 <- DT::renderDataTable(expr = {
+    all_tbl_filtered()
+}, options = list(scrollY = "250px"))
+
+DTOutput(outputId = "dt_output_1")
+```
+
+
+### Section - Reactive Summary
+
+```{r}
+output$dt_output_2 <- DT::renderDataTable(expr = {
+    all_tbl_filtered() %>% 
+        group_by(team) %>%
+        #summarise(total_team_ppa = sum(totalPPA.all)) %>%
+        summarise(avg_ppa = sum(totalPPA.all/countablePlays)) %>% 
+        ungroup()
+}, options = list(scrollY = "250px"))
+
+DTOutput(outputId = "dt_output_2")
+```
+
